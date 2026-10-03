@@ -98,6 +98,25 @@ def make_handler(service: Service, static_dir: str):
                     actor, role = self._identity()
                     del actor
                     self._json(200, {"events": service.audit(role)})
+                elif path == "/api/batches":
+                    actor, role = self._identity()
+                    del actor
+                    self._json(200, {"batches": service.list_batches(role)})
+                elif path.startswith("/api/persons/") and path.endswith("/annual"):
+                    person = path.split("/")[3]
+                    actor, role = self._identity()
+                    del actor
+                    self._json(200, {"annual_totals": service.get_annual_totals(person, role)})
+                elif path.startswith("/api/persons/") and path.endswith("/conclusions"):
+                    person = path.split("/")[3]
+                    actor, role = self._identity()
+                    del actor
+                    self._json(200, {"conclusions": service.get_conclusions(person, role)})
+                elif path.startswith("/api/batches/"):
+                    external_ref = path.split("/")[3]
+                    actor, role = self._identity()
+                    del actor
+                    self._json(200, service.get_batch(external_ref, role))
                 else:
                     self._json(404, {"error": "not_found"})
             except Exception as exc:
@@ -119,6 +138,13 @@ def make_handler(service: Service, static_dir: str):
                     expected = body.get("expected_version")
                     self._json(200, service.transition(
                         item_id, target, expected, actor, role))
+                elif path == "/api/batches":
+                    self._json(201, service.submit_batch(body, actor, role))
+                elif path == "/api/batches/recover":
+                    self._json(200, service.recover_batches(actor, role))
+                elif path.startswith("/api/persons/") and path.endswith("/recalculate"):
+                    person = path.split("/")[3]
+                    self._json(200, service.recalculate(person, actor, role))
                 else:
                     self._json(404, {"error": "not_found"})
             except Exception as exc:
