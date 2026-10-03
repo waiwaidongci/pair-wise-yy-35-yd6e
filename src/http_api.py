@@ -98,6 +98,10 @@ def make_handler(service: Service, static_dir: str):
                     actor, role = self._identity()
                     del actor
                     self._json(200, {"events": service.audit(role)})
+                elif path == "/api/doses":
+                    actor, role = self._identity()
+                    del actor
+                    self._json(200, service.dose_state(role))
                 else:
                     self._json(404, {"error": "not_found"})
             except Exception as exc:
@@ -119,6 +123,14 @@ def make_handler(service: Service, static_dir: str):
                     expected = body.get("expected_version")
                     self._json(200, service.transition(
                         item_id, target, expected, actor, role))
+                elif path == "/api/dose-batches":
+                    self._json(202, service.submit_batches(body, actor, role))
+                elif path == "/api/dose-batches/recover":
+                    self._json(200, service.recover_batches(body, actor, role))
+                elif path == "/api/doses/legacy":
+                    self._json(201, service.import_legacy(body, actor, role))
+                elif path == "/api/doses/backfill-years":
+                    self._json(200, service.backfill_years(body, actor, role))
                 else:
                     self._json(404, {"error": "not_found"})
             except Exception as exc:

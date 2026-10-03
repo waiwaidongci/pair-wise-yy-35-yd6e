@@ -3,16 +3,21 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from .domain import ensure_role, normalize_severity, require_number, require_text
+from .recalc import RecalcEngine
 from .repository import Repository
 from .rules import (AUDIT_ROLES, CREATE_ROLES, ENTITY, RECORD_ROLES, TITLE,
                     VIEW_ROLES, completion_blockers, escalation_required,
                     priority_score, response_deadline_hours, role_for_transition,
                     validate_transition)
 
+RECALC_ROLES = set(["dosimetrist", "radiation_officer"])
+BACKFILL_ROLES = set(["dosimetrist"])
+
 
 class Service:
     def __init__(self, repository: Repository):
         self.repository = repository
+        self.recalc = RecalcEngine(repository)
 
     def _view(self, role: str) -> None:
         ensure_role(role, VIEW_ROLES)
@@ -90,6 +95,46 @@ class Service:
     def audit(self, role: str, item_id: Optional[int] = None) -> list:
         ensure_role(role, AUDIT_ROLES)
         return self.repository.list_audit(item_id)
+
+    # ------------------------------------------------------- 重算链用例
+
+    def submit_batches(self, payload: Dict[str, Any], actor: str,
+                       role: str) -> Dict[str, Any]:
+        ensure_role(role, RECALC_ROLES)
+        actor = require_text(actor, "actor", 100)
+        batches = payload.get("batches")
+        if isinstance(batches, dict):
+            batches = [batches]
+        if not isinstance(batches, list) or not batches:
+            raise ValueError("batches必须是非空列表")
+        return self.recalc.submit_batches(batches, actor)
+
+    def recover_batches(self, payload: Dict[str, Any], actor: str,
+                        role: str) -> Dict[str, Any]:
+        ensure_role(role, RECALC_ROLES)
+        actor = require_text(actor, "actor", 100)
+        del payload
+        return self.recalc.recover(actor)
+
+    def import_legacy(self, payload: Dict[str, Any], actor: str,
+                      role: str) -> Dict[str, Any]:
+        ensure_role(role, BACKFILL_ROLES)
+        actor = require_text(actor, "actor", 100)
+        readings = payload.get("readings")
+        if not isinstance(readings, list) or not readings:
+            raise ValueError("readings必须是非空列表")
+        return self.recalc.import_legacy(readings, actor)
+
+    def backfill_years(self, payload: Dict[str, Any], actor: str,
+                       role: str) -> Dict[str, Any]:
+        ensure_role(role, BACKFILL_ROLES)
+        actor = require_text(actor, "actor", 100)
+        del payload
+        return self.recalc.backfill_year_keys(actor)
+
+    def dose_state(self, role: str) -> Dict[str, Any]:
+        self._view(role)
+        return self.repository.list_dose_state()
 
     @staticmethod
     def enrich(item: Dict[str, Any]) -> Dict[str, Any]:
